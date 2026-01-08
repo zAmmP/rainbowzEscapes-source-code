@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>An Amazing Game!</title>
+<style>
+    body { margin:0; overflow:hidden; background:#87CEEB; font-family:sans-serif;}
+    #hud {
+        position:absolute; top:10px; left:10px; color:white; font-size:24px;
+        text-shadow: 2px 2px 4px #000;
+        z-index:2;
+    }
+    #loading {
+        position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+        color:white; font-size:36px; font-family:cursive;
+        z-index:2;
+    }
+</style>
+</head>
+<body>
+
+<div id="loading">LOADING...</div>
+<div id="hud">Score: 0 | Health: 100</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+<script>
+/* ================= SCENE ================= */
+let scene = new THREE.Scene();
+scene.background = new THREE.Color(0x87CEEB);
+
+let camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+let renderer = new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.appendChild(renderer.domElement);
+
+/* ================= MUSIC ================= */
+const music = new Audio("https://cdn.pixabay.com/download/audio/2022/03/15/audio_9c1f9b8d7b.mp3?filename=arcade-ambience-110397.mp3");
+music.loop = true;
+music.volume = 0.4;
+let musicStarted = false;
+
+function startMusic(){
+    if(!musicStarted){
+        music.play().catch(()=>{});
+        musicStarted = true;
+    }
+}
+document.addEventListener("keydown", startMusic);
+document.addEventListener("click", startMusic);
+
+/* ================= PLAYER ================= */
+const spawnPosition = new THREE.Vector3(0,0.5,0);
+let player = new THREE.Mesh(
+    new THREE.BoxGeometry(1,1,1),
+    new THREE.MeshStandardMaterial({color:0xffffff})
+);
+player.position.copy(spawnPosition);
+scene.add(player);
+
+/* ================= NPC ================= */
+let npc = null;
+let npcSpawned = false;
+
+/* ================= GROUND ================= */
+let ground = new THREE.Mesh(
+    new THREE.PlaneGeometry(50,50),
+    new THREE.MeshStandardMaterial({color:0x228B22})
+);
+ground.rotation.x = -Math.PI/2;
+scene.add(ground);
+
+/* ================= LIGHT ================= */
+let light = new THREE.DirectionalLight(0xffffff,1);
+light.position.set(5,10,5);
+scene.add(light);
+
+/* ================= OBSTACLES ================= */
+let obstacles = [];
+function spawnObstacle(){
+    let box = new THREE.Mesh(
+        new THREE.BoxGeometry(1,1,1),
+        new THREE.MeshStandardMaterial({color:0xffff00})
+    );
+    box.position.set(
+        (Math.random()-0.5)*20,
+        0.5,
+        (Math.random()-0.5)*20
+    );
+    scene.add(box);
+    obstacles.push(box);
+}
+for(let i=0;i<10;i++) spawnObstacle();
+
+/* ================= CONTROLS ================= */
+let keys = {};
+document.addEventListener('keydown', e=>keys[e.key.toLowerCase()]=true);
+document.addEventListener('keyup', e=>keys[e.key.toLowerCase()]=false);
+
+/* ================= HUD ================= */
+let score = 0;
+let health = 100;
+const hud = document.getElementById("hud");
+const loadingScreen = document.getElementById("loading");
+
+/* ================= CAMERA ================= */
+camera.position.set(0,5,10);
+camera.lookAt(player.position);
+
+/* ================= LOADING FIX ================= */
+window.addEventListener("load", ()=>{
+    loadingScreen.style.display = "none";
+});
+
+/* ================= GAME LOOP ================= */
+function animate(){
+    requestAnimationFrame(animate);
+
+    /* --- Movement + Sprint --- */
+    let speed = keys["shift"] ? 0.3 : 0.15;
+    if(keys['w']) player.position.z -= speed;
+    if(keys['s']) player.position.z += speed;
+    if(keys['a']) player.position.x -= speed;
+    if(keys['d']) player.position.x += speed;
+
+    /* --- Camera Follow --- */
+    camera.position.x = player.position.x;
+    camera.position.z = player.position.z + 10;
+    camera.lookAt(player.position);
+
+    /* --- Collect Points --- */
+    obstacles.forEach((o,i)=>{
+        if(player.position.distanceTo(o.position)<1){
+            scene.remove(o);
+            obstacles.splice(i,1);
+            score++;
+            hud.innerText = `Score: ${score} | Health: ${health}`;
+            setTimeout(spawnObstacle,3000);
+
+            if(!npcSpawned){
+                npcSpawned = true;
+                npc = new THREE.Mesh(
+                    new THREE.BoxGeometry(1,1,1),
+                    new THREE.MeshStandardMaterial({color:0xff0000})
+                );
+                npc.position.set(5,0.5,5);
+                scene.add(npc);
+            }
+        }
+    });
+
+    /* --- NPC AI + Damage --- */
+    if(npc){
+        let dir = new THREE.Vector3().subVectors(player.position, npc.position);
+        dir.normalize();
+        npc.position.add(dir.multiplyScalar(0.05));
+
+        if(player.position.distanceTo(npc.position)<1){
+            health -= 1;
+            hud.innerText = `Score: ${score} | Health: ${health}`;
+
+            if(health <= 0){
+                health = 100;
+                score = 0;
+                player.position.copy(spawnPosition);
+                hud.innerText = `Score: ${score} | Health: ${health}`;
+            }
+        }
+    }
+
+    renderer.render(scene, camera);
+}
+animate();
+
+/* ================= RESIZE ================= */
+window.addEventListener('resize', ()=>{
+    camera.aspect = window.innerWidth/window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+});
+</script>
+</body>
+</html>
